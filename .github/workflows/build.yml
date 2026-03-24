@@ -27,14 +27,17 @@ jobs:
           dotnet-version: '8.x'
 
       # ── 3. Restore NuGet packages ────────────────────────────────────────
+      #    Pass -r win-x64 so the runtime packs required by PublishSingleFile
+      #    and ReadyToRun are downloaded during restore, not at publish time.
       - name: Restore
-        run: dotnet restore VideoCompressorUI/VideoCompressorUI.csproj
+        run: dotnet restore VideoCompressorUI/VideoCompressorUI.csproj -r win-x64
 
       # ── 4. Publish (Release · win-x64 · single-file) ────────────────────
       - name: Publish
         run: >-
           dotnet publish VideoCompressorUI/VideoCompressorUI.csproj
           -c Release
+          -r win-x64
           -o ./publish
           --no-restore
 
