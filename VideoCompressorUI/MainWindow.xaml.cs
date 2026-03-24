@@ -1,7 +1,11 @@
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -287,5 +291,90 @@ namespace VideoCompressorUI
         private static bool IsVideoFile(string path)
             => Array.IndexOf(VideoExtensions,
                Path.GetExtension(path).ToLowerInvariant()) >= 0;
+
+        // ── Context-menu registration ────────────────────────────────────────
+        private async void RegisterCtxBtn_Click(object sender, RoutedEventArgs e)
+        {
+            RegisterCtxBtn.IsEnabled      = false;
+            CtxMenuStatusLabel.Text       = "Registering…";
+            CtxMenuStatusLabel.Foreground = FindResource("TextSecondaryBrush") as Brush;
+
+            try
+            {
+                // Use the running exe path so the entry always points to the correct location.
+                string exePath = Process.GetCurrentProcess().MainModule?.FileName
+                                 ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VideoCompressorUI.exe");
+
+                // Write the reg file next to the exe so users can also run it manually.
+                string regFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                                              "install_context_menu.reg");
+
+                await Task.Run(() =>
+                    File.WriteAllText(regFile, BuildRegContent(exePath), Encoding.Unicode));
+
+                // regedit /s imports silently; runas triggers UAC for admin rights.
+                var psi = new ProcessStartInfo("regedit.exe", $"/s \"{regFile}\"")
+                {
+                    UseShellExecute = true,
+                    Verb            = "runas"
+                };
+
+                int exitCode = await Task.Run(() =>
+                {
+                    using var proc = Process.Start(psi)!;
+                    proc.WaitForExit();
+                    return proc.ExitCode;
+                });
+
+                bool ok = exitCode == 0;
+                CtxMenuStatusLabel.Text       = ok
+                    ? "✓  Registered — right-click any video file in Explorer to see the option."
+                    : "Registration failed. Try running the app as administrator.";
+                CtxMenuStatusLabel.Foreground = (ok
+                    ? FindResource("SuccessBrush")
+                    : FindResource("DangerBrush")) as Brush;
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+            {
+                // User dismissed the UAC prompt.
+                CtxMenuStatusLabel.Text       = "Cancelled — administrator permission is required.";
+                CtxMenuStatusLabel.Foreground = FindResource("DangerBrush") as Brush;
+            }
+            catch (Exception ex)
+            {
+                ShowError($"Failed to register context menu:\n{ex.Message}");
+            }
+            finally
+            {
+                RegisterCtxBtn.IsEnabled = true;
+            }
+        }
+
+        /// <summary>
+        /// Generates .reg file content that registers a right-click "Compress this video"
+        /// entry for all supported video extensions, pointing to <paramref name="exePath"/>.
+        /// </summary>
+        private static string BuildRegContent(string exePath)
+        {
+            // .reg format requires backslashes doubled and quotes escaped with backslash.
+            string ep = exePath.Replace(@"\", @"\\");
+
+            string[] exts = { ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v" };
+
+            var sb = new StringBuilder();
+            sb.AppendLine("Windows Registry Editor Version 5.00");
+
+            foreach (string ext in exts)
+            {
+                sb.AppendLine();
+                sb.AppendLine($@"[HKEY_CLASSES_ROOT\SystemFileAssociations\{ext}\shell\VideoCompressor]");
+                sb.AppendLine(@"@=""Compress this video""");
+                sb.AppendLine($"\"Icon\"=\"{ep},0\"");
+                sb.AppendLine($@"[HKEY_CLASSES_ROOT\SystemFileAssociations\{ext}\shell\VideoCompressor\command]");
+                sb.AppendLine($"@=\"\\\"{ep}\\\" \\\"%1\\\"\"");
+            }
+
+            return sb.ToString();
+        }
     }
 }

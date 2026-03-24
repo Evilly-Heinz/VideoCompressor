@@ -2,7 +2,18 @@ Windows Registry Editor Version 5.00
 
 ; ============================================================
 ;  VideoCompressor — right-click context menu for video files
-;  Run install.bat as Administrator (it patches INSTALL_DIR).
+;
+;  Option A (recommended):
+;    Open VideoCompressorUI.exe and click "Register" in the
+;    Explorer Integration section. The app writes this file
+;    with the correct path and imports it automatically.
+;
+;  Option B (manual):
+;    Replace every %INSTALL_DIR% below with the full path to
+;    the folder that contains VideoCompressorUI.exe, then
+;    double-click this file (requires administrator).
+;
+;  Example path: C:\\Users\\You\\Apps\\VideoCompressor
 ; ============================================================
 
 ; ── .mp4 ─────────────────────────────────────────────────────
@@ -52,4 +63,11 @@ Windows Registry Editor Version 5.00
 @="Compress this video"
 "Icon"="%INSTALL_DIR%\\VideoCompressorUI.exe,0"
 [HKEY_CLASSES_ROOT\SystemFileAssociations\.webm\shell\VideoCompressor\command]
+@="\"%INSTALL_DIR%\\VideoCompressorUI.exe\" \"%1\""
+
+; ── .m4v ─────────────────────────────────────────────────────
+[HKEY_CLASSES_ROOT\SystemFileAssociations\.m4v\shell\VideoCompressor]
+@="Compress this video"
+"Icon"="%INSTALL_DIR%\\VideoCompressorUI.exe,0"
+[HKEY_CLASSES_ROOT\SystemFileAssociations\.m4v\shell\VideoCompressor\command]
 @="\"%INSTALL_DIR%\\VideoCompressorUI.exe\" \"%1\""

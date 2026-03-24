@@ -1,92 +1,131 @@
-# VideoCompressor
+# Video Compressor
 
-Công cụ nén video Windows 11 — chuột phải vào video → **"Compress this video"**
+A lightweight Windows video compressor with a Fluent dark UI.  
+Drop a video file, pick quality/speed, click **Compress** — done.
 
-Output: `{tên_video}_compressed.mp4` cùng thư mục với file gốc.
+Output: `{original_name}_compressed.mp4` saved next to the source file.
 
 ---
 
-## Cấu trúc solution
+## Features
+
+- Drag-and-drop or browse to select video
+- H.264 + AAC re-encode via FFmpeg (auto-downloaded on first use)
+- Adjustable CRF quality slider (18 – 40) and speed preset
+- Live progress bar with percentage
+- One-click **Explorer right-click menu** registration ("Compress this video")
+- Single-file `.exe`, no installer required
+
+---
+
+## Requirements (end users)
+
+| Requirement | Notes |
+|---|---|
+| Windows 10 / 11 x64 | |
+| [.NET 8 Desktop Runtime](https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe) | ~55 MB, one-time install |
+| Internet connection (first run only) | FFmpeg binaries are downloaded automatically (~70 MB) and cached in `<app folder>\ffmpeg\` |
+
+---
+
+## Quick start
+
+1. Download the latest `VideoCompressor-vX.Y.Z.zip` from [Releases](../../releases).
+2. Extract anywhere (e.g. `C:\Tools\VideoCompressor\`).
+3. Install [.NET 8 Desktop Runtime](https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe) if not already present.
+4. Run `VideoCompressorUI.exe`.
+5. On first compression, FFmpeg is downloaded automatically — no manual setup needed.
+
+### Register the right-click menu (optional)
+
+In the app, scroll to the **Explorer Integration** card at the bottom and click **Register**.  
+A UAC prompt will appear; click **Yes**.  
+After that, right-clicking any `.mp4`, `.mov`, `.avi`, `.mkv`, `.wmv`, `.flv`, `.webm`, or `.m4v`  
+file in Explorer shows **"Compress this video"**, which opens the app with that file pre-loaded.
+
+---
+
+## Project structure
 
 ```
-VideoCompressor.sln                ← mở bằng Visual Studio 2022
+VideoCompressor.sln
 │
-├── Compressor\                    ← C++ project (Console, x64)
-│   ├── VideoCompressor.vcxproj
-│   └── VideoCompressor.cpp        ← gọi ffmpeg, stream progress
-│
-├── VideoCompressorUI\             ← C# WPF project (.NET 8, x64)
+├── VideoCompressorUI\              ← C# WPF project (.NET 8, x64)
 │   ├── VideoCompressorUI.csproj
-│   ├── app.manifest               ← PerMonitorV2 DPI, Win11
+│   ├── app.manifest                ← PerMonitorV2 DPI, Win11
 │   ├── App.xaml / App.xaml.cs
-│   ├── MainWindow.xaml            ← Fluent dark UI, custom titlebar
+│   ├── MainWindow.xaml             ← Fluent dark UI, custom title bar
 │   ├── MainWindow.xaml.cs
-│   └── Themes\Styles.xaml         ← Win11 Fluent color tokens + styles
+│   └── Themes\Styles.xaml          ← Win11 Fluent color tokens + styles
 │
 ├── scripts\
-│   └── install_context_menu.reg
+│   └── install_context_menu.reg    ← registry template (app auto-generates this)
 │
-├── install.bat     ← đăng ký context menu (cần Admin)
-└── uninstall.bat   ← gỡ context menu
+└── .github\workflows\
+    └── build.yml                   ← CI: build → zip → GitHub Release
 ```
 
-Output build: `bin\Release\` (cả hai exe cùng thư mục).
+Output: `bin\Release\VideoCompressorUI.exe`
 
 ---
 
-## Build với Visual Studio 2022
+## Build from source
 
-### Yêu cầu
-| Thành phần | Ghi chú |
+### Requirements
+
+| Component | Notes |
 |---|---|
-| Visual Studio 2022 (v17+) | Community/Pro/Enterprise đều được |
-| Workload: **Desktop development with C++** | cho C++ project |
-| Workload: **.NET desktop development** | cho WPF project |
-| .NET 8 SDK | thường đi kèm VS2022 |
-| **ffmpeg.exe** | download riêng, xem bên dưới |
+| Visual Studio 2022 (v17+) | Community / Pro / Enterprise |
+| Workload: **.NET desktop development** | includes .NET 8 SDK |
 
-### Các bước
-1. Mở `VideoCompressor.sln` bằng Visual Studio 2022
-2. Chọn configuration **Release | x64**
-3. **Build → Build Solution** (`Ctrl+Shift+B`)
-4. Output nằm ở `bin\Release\`
+NuGet packages are restored automatically:
 
-> Debug build cũng hoạt động để dev/test.
+| Package | Purpose |
+|---|---|
+| `Xabe.FFmpeg` 6.0.2 | FFmpeg wrapper |
+| `Xabe.FFmpeg.Downloader` 6.0.2 | Auto-downloads FFmpeg binaries on first use |
+| `System.Text.Json` 9.0.0 | JSON support (transitive dependency) |
 
-### Tải ffmpeg.exe
-1. Vào https://github.com/BtbN/FFmpeg-Builds/releases
-2. Tải `ffmpeg-master-latest-win64-gpl.zip`
-3. Giải nén, lấy `bin\ffmpeg.exe`
-4. Copy `ffmpeg.exe` vào `bin\Release\`
+### Steps
+
+```bash
+# Clone
+git clone <repo-url>
+cd VideoCompressor2
+
+# Restore & publish (single-file, framework-dependent)
+dotnet publish VideoCompressorUI/VideoCompressorUI.csproj -c Release -r win-x64 -o ./publish
+```
+
+Or open `VideoCompressor.sln` in Visual Studio 2022, select **Release | x64**, and press `Ctrl+Shift+B`.
 
 ---
 
-## Cài đặt context menu
+## CI / CD
 
-```
-Chuột phải vào install.bat → "Run as administrator"
-```
+GitHub Actions workflow: `.github/workflows/build.yml`
 
-Sau đó: chuột phải bất kỳ `.mp4`, `.mov`, `.avi`, `.mkv`... → **"Compress this video"**
+| Trigger | Result |
+|---|---|
+| Push to `main` | Build + upload artifact |
+| Push tag `v1.0.0` | Build + upload artifact + **GitHub Release** with zip attached |
+| Pull request to `main` | Build only |
+| Manual (`workflow_dispatch`) | Build + upload artifact |
+
+To publish a release:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
 
 ---
 
-## Gỡ cài đặt
+## Technical notes
 
-```
-Chuột phải uninstall.bat → "Run as administrator"
-```
-
----
-
-## Ghi chú kỹ thuật
-
-- **C++ project**: toolset v143 (VS2022), C++17, Unicode, x64 only
-- **WPF project**: .NET 8, net8.0-windows, PerMonitorV2 DPI aware
-- **UI**: custom titlebar với WindowChrome, Win11 Fluent dark palette,
-  Segoe UI Variable Text font, caption buttons (min/max/close)
-- **IPC**: VideoCompressorUI đọc stdout của VideoCompressor.exe theo format:
-  - `PROGRESS:N` — tiến độ 0–100
-  - `STATUS: STARTING / DONE / ERROR`
-  - `SIZE_IN:<bytes>` / `SIZE_OUT:<bytes>`
-  - `DURATION:<ms>`
+- **Single project**: C++ wrapper removed; FFmpeg is invoked via `Xabe.FFmpeg` NuGet — no separate `.exe` needed.
+- **Framework-dependent publish**: avoids extracting the .NET runtime to `%TEMP%`, which reduces antivirus false positives.
+- **FFmpeg path**: binaries are stored in `<AppDir>\ffmpeg\` and downloaded once via `Xabe.FFmpeg.Downloader`.
+- **Context menu**: written as UTF-16 LE `.reg` and imported via `regedit.exe /s` with UAC elevation — the app remains non-elevated at all other times.
+- **UI**: custom title bar with `WindowChrome`, Win11 Fluent dark palette, Segoe UI Variable Text, min/max/close caption buttons.
+- **Target**: `net8.0-windows`, `win-x64`, single-file exe.

@@ -312,6 +312,34 @@
                                    HorizontalAlignment="Right"/>
                     </Grid>
 
+                    <!-- Explorer Integration -->
+                    <Border Style="{StaticResource Card}" Margin="0,16,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="EXPLORER INTEGRATION"
+                                           FontSize="10" FontWeight="SemiBold"
+                                           Foreground="{StaticResource TextTertiaryBrush}"
+                                           Margin="0,0,0,3"/>
+                                <TextBlock x:Name="CtxMenuStatusLabel"
+                                           Text="Add &#x22;Compress this video&#x22; to right-click menu in Explorer."
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Button x:Name="RegisterCtxBtn"
+                                    Grid.Column="2"
+                                    Content="Register"
+                                    Style="{StaticResource SubtleButton}"
+                                    VerticalAlignment="Center"
+                                    Click="RegisterCtxBtn_Click"/>
+                        </Grid>
+                    </Border>
+
                 </StackPanel>
             </ScrollViewer>
         </Grid>
