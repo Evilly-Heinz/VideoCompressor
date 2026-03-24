@@ -99,3 +99,5 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(steps.ver.outputs.version, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
