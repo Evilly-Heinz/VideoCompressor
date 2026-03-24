@@ -34,12 +34,13 @@ jobs:
 
       # ── 4. Publish (Release · win-x64 · single-file) ────────────────────
       - name: Publish
-        run: >-
+        run: >
           dotnet publish VideoCompressorUI/VideoCompressorUI.csproj
           -c Release
           -r win-x64
           -o ./publish
           --no-restore
+          /p:PublishReadyToRun=false
 
       # ── 5. Add a README so users know the runtime requirement ────────────
       - name: Write distribution README
