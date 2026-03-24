@@ -24,7 +24,7 @@ Output: `{original_name}_compressed.mp4` saved next to the source file.
 |---|---|
 | Windows 10 / 11 x64 | |
 | [.NET 8 Desktop Runtime](https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe) | ~55 MB, one-time install |
-| Internet connection (first run only) | FFmpeg binaries are downloaded automatically (~70 MB) and cached in `<app folder>\ffmpeg\` |
+| FFmpeg | Included in `ffmpeg\` inside the release zip — no download needed |
 
 ---
 
@@ -34,7 +34,8 @@ Output: `{original_name}_compressed.mp4` saved next to the source file.
 2. Extract anywhere (e.g. `C:\Tools\VideoCompressor\`).
 3. Install [.NET 8 Desktop Runtime](https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe) if not already present.
 4. Run `VideoCompressorUI.exe`.
-5. On first compression, FFmpeg is downloaded automatically — no manual setup needed.
+
+FFmpeg is included in the `ffmpeg\` subfolder — no internet access required.
 
 ### Register the right-click menu (optional)
 
@@ -124,8 +125,8 @@ git push origin v1.0.0
 ## Technical notes
 
 - **Single project**: C++ wrapper removed; FFmpeg is invoked via `Xabe.FFmpeg` NuGet — no separate `.exe` needed.
-- **Framework-dependent publish**: avoids extracting the .NET runtime to `%TEMP%`, which reduces antivirus false positives.
-- **FFmpeg path**: binaries are stored in `<AppDir>\ffmpeg\` and downloaded once via `Xabe.FFmpeg.Downloader`.
+- **Framework-dependent, multi-file publish**: avoids extracting anything to `%TEMP%` at runtime, eliminating the main AV false-positive trigger. Single-file WPF bundles extract native DLLs (`PresentationNative`, `vcruntime…`) to `%TEMP%` on every launch.
+- **FFmpeg bundled in release**: `ffmpeg.exe` and `ffprobe.exe` are downloaded during CI and included in the release zip — no runtime internet access or executable download needed.
 - **Context menu**: written as UTF-16 LE `.reg` and imported via `regedit.exe /s` with UAC elevation — the app remains non-elevated at all other times.
 - **UI**: custom title bar with `WindowChrome`, Win11 Fluent dark palette, Segoe UI Variable Text, min/max/close caption buttons.
 - **Target**: `net8.0-windows`, `win-x64`, single-file exe.

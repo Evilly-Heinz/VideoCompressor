@@ -32,22 +32,46 @@ jobs:
           dotnet-version: '8.x'
 
       # ── 3. Restore NuGet packages ────────────────────────────────────────
-      #    Pass -r win-x64 so the runtime packs required by PublishSingleFile
-      #    and ReadyToRun are downloaded during restore, not at publish time.
+      #    Pass -r win-x64 so the runtime packs are downloaded during restore.
       - name: Restore
         run: dotnet restore VideoCompressorUI/VideoCompressorUI.csproj -r win-x64
 
-      # ── 4. Publish (Release · win-x64 · single-file) ────────────────────
+      # ── 4. Publish (Release · win-x64 · multi-file · framework-dependent) ──
+      #    PublishSingleFile is intentionally OFF: WPF single-file bundles extract
+      #    native DLLs (PresentationNative, vcruntime…) to %TEMP% on every launch,
+      #    a pattern AV engines flag as suspicious (malware DLL-drop behaviour).
+      #    Multi-file deployment writes nothing to %TEMP% at runtime.
       - name: Publish
-        run: >
+        run: >-
           dotnet publish VideoCompressorUI/VideoCompressorUI.csproj
           -c Release
           -r win-x64
           -o ./publish
           --no-restore
-          /p:PublishReadyToRun=false
 
-      # ── 5. Add a README so users know the runtime requirement ────────────
+      # ── 5. Bundle FFmpeg ─────────────────────────────────────────────────
+      #    Downloading executables from the internet at runtime is the #1
+      #    behavioural AV trigger. Pre-bundling ffmpeg/ffprobe eliminates it:
+      #    the app finds them already present and skips the download entirely.
+      - name: Bundle FFmpeg
+        shell: pwsh
+        run: |
+          $zip = "./ffmpeg-win64.zip"
+          Write-Host "Downloading FFmpeg..."
+          Invoke-WebRequest `
+            -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" `
+            -OutFile $zip
+          Write-Host "Extracting..."
+          Expand-Archive -Path $zip -DestinationPath "./ffmpeg-extract" -Force
+          $binDir = Get-ChildItem -Path "./ffmpeg-extract" -Recurse -Directory -Filter "bin" |
+                    Select-Object -First 1
+          New-Item -ItemType Directory -Path "./publish/ffmpeg" -Force | Out-Null
+          Copy-Item "$($binDir.FullName)\ffmpeg.exe"  "./publish/ffmpeg/"
+          Copy-Item "$($binDir.FullName)\ffprobe.exe" "./publish/ffmpeg/"
+          Remove-Item $zip, "./ffmpeg-extract" -Recurse -Force
+          Write-Host "Bundled: $(Get-ChildItem ./publish/ffmpeg | Select-Object -ExpandProperty Name)"
+
+      # ── 6. Add distribution README ───────────────────────────────────────
       - name: Write distribution README
         shell: pwsh
         run: |
@@ -58,15 +82,17 @@ jobs:
             .NET 8 Desktop Runtime (x64)
             Download: https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe
 
-          FFmpeg is downloaded automatically on first use (~70 MB, one-time).
-          It is stored in:  <app folder>\ffmpeg\
+          FFmpeg is included in the ffmpeg\ subfolder — no internet access required.
 
           Usage:
             Run VideoCompressorUI.exe
             Drop a video file onto the window, or click Browse.
+
+          Right-click menu (optional):
+            Open the app and click Register in the Explorer Integration section.
           "@ | Set-Content ./publish/README.txt
 
-      # ── 6. Resolve version / artifact name ──────────────────────────────
+      # ── 7. Resolve version / artifact name ──────────────────────────────
       - name: Resolve version
         id: ver
         shell: pwsh
@@ -76,16 +102,16 @@ jobs:
           } else {
             $v = "dev-$($env:GITHUB_SHA.Substring(0,7))"
           }
-          echo "version=$v"                       >> $env:GITHUB_OUTPUT
-          echo "artifact=VideoCompressor-$v"      >> $env:GITHUB_OUTPUT
-          echo "zip=VideoCompressor-$v.zip"       >> $env:GITHUB_OUTPUT
+          echo "version=$v"                  >> $env:GITHUB_OUTPUT
+          echo "artifact=VideoCompressor-$v" >> $env:GITHUB_OUTPUT
+          echo "zip=VideoCompressor-$v.zip"  >> $env:GITHUB_OUTPUT
 
-      # ── 7. Zip ───────────────────────────────────────────────────────────
+      # ── 8. Zip ───────────────────────────────────────────────────────────
       - name: Zip
         shell: pwsh
         run: Compress-Archive -Path ./publish/* -DestinationPath "${{ steps.ver.outputs.zip }}"
 
-      # ── 8. Upload build artifact (always) ────────────────────────────────
+      # ── 9. Upload build artifact (always) ────────────────────────────────
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -93,7 +119,7 @@ jobs:
           path: ${{ steps.ver.outputs.zip }}
           retention-days: 30
 
-      # ── 9. Create GitHub Release (only on version tags) ──────────────────
+      # ── 10. Create GitHub Release (only on version tags) ─────────────────
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -21,13 +21,14 @@
     <ApplicationIcon>video-gallery-100.ico</ApplicationIcon>
   </PropertyGroup>
 
-  <!-- Publish as single-file framework-dependent (requires .NET 8 Desktop Runtime on target machine).
-       Framework-dependent avoids bundling + extracting the full runtime to %TEMP%, which
-       triggers behavioral AV heuristics (malware commonly drops DLLs to temp then loads them). -->
+  <!-- Framework-dependent: end-user must have .NET 8 Desktop Runtime installed.
+       SelfContained=false avoids shipping and extracting the full runtime to %TEMP%,
+       which is a common AV false-positive trigger.
+       PublishSingleFile is intentionally NOT set: single-file WPF bundles extract
+       native DLLs (PresentationNative, vcruntime…) to %TEMP% on every launch,
+       another common AV heuristic. Multi-file deployment writes nothing to %TEMP%. -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
-    <PublishReadyToRun>true</PublishReadyToRun>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="video-gallery-100.ico" />
