@@ -1,19 +1,25 @@
 using System;
-using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
+using Xabe.FFmpeg;
+using Xabe.FFmpeg.Downloader;
 
 namespace VideoCompressorUI
 {
     public partial class MainWindow : Window
     {
         // ── State ────────────────────────────────────────────────────────────
-        private string?  _inputFile;
-        private bool     _isCompressing;
-        private Process? _compressorProcess;
+        private string?                  _inputFile;
+        private bool                     _isCompressing;
+        private CancellationTokenSource? _cts;
+
+        private static readonly string FfmpegDir =
+            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg");
 
         private static readonly string[] VideoExtensions =
             { ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".ts", ".mts" };
@@ -22,6 +28,7 @@ namespace VideoCompressorUI
         public MainWindow()
         {
             InitializeComponent();
+            FFmpeg.SetExecutablesPath(FfmpegDir);
 
             // Launched from context-menu: VideoCompressorUI.exe "path\to\video.mp4"
             var args = Environment.GetCommandLineArgs();
@@ -85,20 +92,20 @@ namespace VideoCompressorUI
             var fi     = new FileInfo(path);
             string mb  = (fi.Length / 1_048_576.0).ToString("F1");
 
-            DropIcon.Text  = "\uE8A5"; // Video icon (Segoe Fluent)
+            DropIcon.Text  = "\uE8A5";
             DropLabel.Text = $"{fi.Name}   ({mb} MB)";
             DropLabel.Foreground = FindResource("TextPrimaryBrush") as Brush;
 
-            CompressBtn.IsEnabled       = true;
-            ProgressPanel.Visibility    = Visibility.Collapsed;
-            SizeLabel.Text              = "";
+            CompressBtn.IsEnabled    = true;
+            ProgressPanel.Visibility = Visibility.Collapsed;
+            SizeLabel.Text           = "";
             SetStatus($"Selected: {fi.Name}  ·  {mb} MB");
         }
 
         // ── Compression ──────────────────────────────────────────────────────
         private void CompressBtn_Click(object sender, RoutedEventArgs e)
         {
-            if (_isCompressing) { _compressorProcess?.Kill(true); return; }
+            if (_isCompressing) { _cts?.Cancel(); return; }
             StartCompression();
         }
 
@@ -111,88 +118,104 @@ namespace VideoCompressorUI
             string output = GetOutputPath(_inputFile);
 
             // UI → busy
-            _isCompressing          = true;
-            CompressBtn.Content     = "■  Cancel";
-            BrowseBtn.IsEnabled     = false;
+            _isCompressing           = true;
+            CompressBtn.Content      = "■  Cancel";
+            BrowseBtn.IsEnabled      = false;
             ProgressPanel.Visibility = Visibility.Visible;
-            ProgressBar.Value       = 0;
-            ProgressPct.Text        = "0%";
-            ProgressTitle.Text      = "Compressing…";
-            ProgressDetail.Text     = $"CRF {crf}  ·  {preset}  →  {Path.GetFileName(output)}";
-            SizeLabel.Text          = "";
+            ProgressBar.Value        = 0;
+            ProgressPct.Text         = "0%";
+            ProgressTitle.Text       = "Compressing…";
+            ProgressDetail.Text      = $"CRF {crf}  ·  {preset}  →  {Path.GetFileName(output)}";
+            SizeLabel.Text           = "";
             SetStatus("Compressing — please wait…");
 
-            // Locate VideoCompressor.exe (same folder as this exe)
-            string exeDir     = AppDomain.CurrentDomain.BaseDirectory;
-            string compressor = Path.Combine(exeDir, "VideoCompressor.exe");
+            _cts = new CancellationTokenSource();
+            bool success   = false;
+            bool cancelled = false;
 
-            if (!File.Exists(compressor))
-            {
-                ShowError(
-                    $"VideoCompressor.exe not found in:\n{exeDir}\n\n" +
-                    "Build the C++ project first (Release|x64) so both EXEs land in bin\\Release\\.");
-                ResetUI();
-                return;
-            }
-
-            bool success = false;
             try
             {
-                _compressorProcess = new Process
+                // ── Ensure FFmpeg binaries are present ───────────────────────
+                Directory.CreateDirectory(FfmpegDir);
+                if (!File.Exists(Path.Combine(FfmpegDir, "ffmpeg.exe")))
                 {
-                    StartInfo = new ProcessStartInfo
+                    ProgressTitle.Text  = "Downloading FFmpeg…";
+                    ProgressDetail.Text = "First-run download from GitHub (~70 MB). Please wait.";
+                    SetStatus("Downloading FFmpeg for the first time…");
+                    await FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, FfmpegDir);
+                    FFmpeg.SetExecutablesPath(FfmpegDir);
+                    ProgressTitle.Text  = "Compressing…";
+                    ProgressDetail.Text = $"CRF {crf}  ·  {preset}  →  {Path.GetFileName(output)}";
+                    SetStatus("Compressing — please wait…");
+                }
+
+                // ── Get media info ────────────────────────────────────────────
+                IMediaInfo info = await FFmpeg.GetMediaInfo(_inputFile!, _cts.Token);
+
+                // ── Build conversion ──────────────────────────────────────────
+                var conversion = FFmpeg.Conversions.New()
+                    .SetOutput(output)
+                    .SetOverwriteOutput(true);
+
+                var video = info.VideoStreams.FirstOrDefault();
+                if (video != null)
+                {
+                    video.SetCodec(VideoCodec.h264);
+                    conversion.AddStream(video);
+                }
+
+                var audio = info.AudioStreams.FirstOrDefault();
+                if (audio != null)
+                {
+                    audio.SetCodec(AudioCodec.aac);
+                    conversion.AddStream(audio);
+                }
+
+                conversion
+                    .AddParameter($"-crf {crf}",      ParameterPosition.PostInput)
+                    .AddParameter($"-preset {preset}", ParameterPosition.PostInput)
+                    .AddParameter("-b:a 128k",         ParameterPosition.PostInput)
+                    .AddParameter("-movflags +faststart", ParameterPosition.PostInput);
+
+                conversion.OnProgress += (_, args) =>
+                    Dispatcher.Invoke(() =>
                     {
-                        FileName               = compressor,
-                        Arguments              = $"\"{_inputFile}\" --crf {crf} --preset {preset}",
-                        UseShellExecute        = false,
-                        CreateNoWindow         = true,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError  = true,
-                        StandardOutputEncoding = System.Text.Encoding.UTF8,
-                    }
-                };
-                _compressorProcess.Start();
+                        int pct = Math.Clamp(args.Percent, 0, 100);
+                        ProgressBar.Value = pct;
+                        ProgressPct.Text  = $"{pct}%";
+                    });
 
-                // Drain stderr silently
-                _compressorProcess.BeginErrorReadLine();
-
-                await System.Threading.Tasks.Task.Run(() =>
-                {
-                    string? line;
-                    while ((line = _compressorProcess!.StandardOutput.ReadLine()) != null)
-                        Dispatcher.Invoke(() => HandleLine(line));
-                    _compressorProcess.WaitForExit();
-                    success = _compressorProcess.ExitCode == 0;
-                });
+                await conversion.Start(_cts.Token);
+                success = File.Exists(output);
+            }
+            catch (OperationCanceledException)
+            {
+                cancelled = true;
             }
             catch (Exception ex)
             {
                 ShowError(ex.Message);
             }
-
-            _compressorProcess = null;
-            _isCompressing     = false;
-
-            if (success && File.Exists(output))
-                OnDone(output);
-            else if (!success)
+            finally
             {
-                ProgressTitle.Text = "Failed or cancelled";
+                _cts?.Dispose();
+                _cts = null;
+            }
+
+            _isCompressing = false;
+
+            if (success)
+            {
+                OnDone(output);
+            }
+            else
+            {
+                ProgressTitle.Text = cancelled ? "Cancelled" : "Failed";
                 ProgressPct.Text   = "✕";
-                SetStatus("Compression failed or was cancelled.", warn: true);
+                SetStatus(cancelled ? "Compression cancelled." : "Compression failed.", warn: true);
             }
 
             ResetUI();
-        }
-
-        private void HandleLine(string line)
-        {
-            if (line.StartsWith("PROGRESS:") && int.TryParse(line[9..], out int pct))
-            {
-                pct = Math.Clamp(pct, 0, 100);
-                ProgressBar.Value = pct;
-                ProgressPct.Text  = $"{pct}%";
-            }
         }
 
         private void OnDone(string outputPath)
@@ -220,7 +243,7 @@ namespace VideoCompressorUI
                 "Done", MessageBoxButton.YesNo, MessageBoxImage.Information);
 
             if (dlg == MessageBoxResult.Yes)
-                Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────
@@ -239,8 +262,8 @@ namespace VideoCompressorUI
 
         private void ResetUI()
         {
-            CompressBtn.Content   = "▶  Compress";
-            BrowseBtn.IsEnabled   = true;
+            CompressBtn.Content = "▶  Compress";
+            BrowseBtn.IsEnabled = true;
         }
 
         private void SetStatus(string text, bool warn = false)

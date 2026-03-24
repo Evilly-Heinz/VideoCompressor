@@ -160,6 +160,7 @@
                     <!-- Drop zone -->
                     <Border x:Name="DropZone"
                             Padding="0,32"
+                            Margin="0,0,0,24"
                             Cursor="Hand"
                             MouseLeftButtonUp="DropZone_Click">
                         <Border.Style>
@@ -176,10 +177,12 @@
                             <TextBlock x:Name="DropIcon" Text="&#xE8B7;"
                                        FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                                        FontSize="32" HorizontalAlignment="Center"
+                                       Margin="0,0,0,16"
                                        Foreground="{StaticResource AccentBrush}"/>
                             <TextBlock x:Name="DropLabel"
                                        Text="Drop video here  or  click to browse"
                                        FontSize="14"
+                                       Margin="0,0,0,12"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        HorizontalAlignment="Center"/>
                             <TextBlock Text="MP4  ·  MOV  ·  AVI  ·  MKV  ·  WMV  ·  FLV  ·  WEBM"
@@ -190,7 +193,7 @@
                     </Border>
 
                     <!-- Settings card -->
-                    <Border Style="{StaticResource Card}">
+                    <Border Style="{StaticResource Card}" Margin="0,0,0,24">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition/>
@@ -252,10 +255,27 @@
                         </Grid>
                     </Border>
 
+                    <!-- Action row -->
+                    <Grid >
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Button x:Name="BrowseBtn" Grid.Column="0"
+                                Content="Browse file…"
+                                Style="{StaticResource SubtleButton}"
+                                Click="BrowseBtn_Click"/>
+                        <Button x:Name="CompressBtn" Grid.Column="2"
+                                Content="▶  Compress"
+                                Style="{StaticResource AccentButton}"
+                                IsEnabled="False"
+                                Click="CompressBtn_Click"/>
+                    </Grid>
                     <!-- Progress card (hidden until compressing) -->
-                    <Border x:Name="ProgressPanel"
+                    <Border x:Name="ProgressPanel" Margin="0,20,0,0"
                             Style="{StaticResource Card}"
-                            Visibility="Collapsed">
+                            Visibility="Collapsed" >
                         <StackPanel >
                             <Grid>
                                 <TextBlock x:Name="ProgressTitle"
@@ -278,23 +298,6 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Action row -->
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition/>
-                            <ColumnDefinition Width="10"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Button x:Name="BrowseBtn" Grid.Column="0"
-                                Content="Browse file…"
-                                Style="{StaticResource SubtleButton}"
-                                Click="BrowseBtn_Click"/>
-                        <Button x:Name="CompressBtn" Grid.Column="2"
-                                Content="▶  Compress"
-                                Style="{StaticResource AccentButton}"
-                                IsEnabled="False"
-                                Click="CompressBtn_Click"/>
-                    </Grid>
 
                     <!-- Status bar -->
                     <Grid Margin="0,2,0,0">

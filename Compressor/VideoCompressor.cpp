@@ -115,8 +115,7 @@ static bool RunFFmpeg(const CompressOptions& opts)
     si.hStdOutput  = hWriteOut;
     si.hStdError   = hWriteErr;
     si.hStdInput   = GetStdHandle(STD_INPUT_HANDLE);
-    si.dwFlags     = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
-    si.wShowWindow = SW_HIDE;
+    si.dwFlags     = STARTF_USESTDHANDLES;   // CREATE_NO_WINDOW (below) already hides the console
 
     PROCESS_INFORMATION pi{};
     std::vector<wchar_t> buf(cmdStr.begin(), cmdStr.end());
