@@ -9,6 +9,11 @@ on:
     branches: [ main ]
   workflow_dispatch:              # allow manual runs from the Actions tab
 
+# ─── Permissions ─────────────────────────────────────────────────────────────
+# contents:write is required to create GitHub Releases and upload release assets.
+permissions:
+  contents: write
+
 # ─── Job ─────────────────────────────────────────────────────────────────────
 jobs:
   build:
@@ -99,5 +104,3 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(steps.ver.outputs.version, '-') }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
