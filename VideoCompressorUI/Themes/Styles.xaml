@@ -37,6 +37,94 @@
     <SolidColorBrush x:Key="TextDisabledBrush"  Color="{StaticResource TextDisabled}"/>
     <SolidColorBrush x:Key="SuccessBrush"       Color="{StaticResource SuccessGreen}"/>
     <SolidColorBrush x:Key="DangerBrush"        Color="{StaticResource DangerRed}"/>
+    <SolidColorBrush x:Key="WarnAmberBrush"     Color="{StaticResource WarnAmber}"/>
+
+    <!-- ═══════════════════════════════════════════════
+         ScrollBar — slim Win11-style (applied globally)
+    ═══════════════════════════════════════════════ -->
+
+    <!-- Shared thumb (4 px wide, grows on hover) -->
+    <Style x:Key="SlimScrollBarThumb" TargetType="Thumb">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="IsTabStop"             Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="thumb"
+                            Background="#4CFFFFFF"
+                            CornerRadius="3"
+                            Margin="2"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="thumb" Property="Background" Value="#80FFFFFF"/>
+                            <Setter TargetName="thumb" Property="Margin"     Value="1"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="thumb" Property="Background" Value="#A8FFFFFF"/>
+                            <Setter TargetName="thumb" Property="Margin"     Value="1"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Vertical template -->
+    <ControlTemplate x:Key="VertScrollBarTpl" TargetType="ScrollBar">
+        <Border Background="Transparent" Width="8" SnapsToDevicePixels="True">
+            <Track x:Name="PART_Track" IsDirectionReversed="True" Margin="0,4">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Opacity="0" IsTabStop="False"
+                                  Focusable="False" Command="ScrollBar.PageUpCommand"/>
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Opacity="0" IsTabStop="False"
+                                  Focusable="False" Command="ScrollBar.PageDownCommand"/>
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource SlimScrollBarThumb}"/>
+                </Track.Thumb>
+            </Track>
+        </Border>
+    </ControlTemplate>
+
+    <!-- Horizontal template -->
+    <ControlTemplate x:Key="HorzScrollBarTpl" TargetType="ScrollBar">
+        <Border Background="Transparent" Height="8" SnapsToDevicePixels="True">
+            <Track x:Name="PART_Track" IsDirectionReversed="False" Margin="4,0">
+                <Track.DecreaseRepeatButton>
+                    <RepeatButton Opacity="0" IsTabStop="False"
+                                  Focusable="False" Command="ScrollBar.PageLeftCommand"/>
+                </Track.DecreaseRepeatButton>
+                <Track.IncreaseRepeatButton>
+                    <RepeatButton Opacity="0" IsTabStop="False"
+                                  Focusable="False" Command="ScrollBar.PageRightCommand"/>
+                </Track.IncreaseRepeatButton>
+                <Track.Thumb>
+                    <Thumb Style="{StaticResource SlimScrollBarThumb}"/>
+                </Track.Thumb>
+            </Track>
+        </Border>
+    </ControlTemplate>
+
+    <!-- Default ScrollBar — picks template by orientation -->
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background"            Value="Transparent"/>
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="SnapsToDevicePixels"   Value="True"/>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Width"    Value="8"/>
+                <Setter Property="MinWidth" Value="8"/>
+                <Setter Property="Template" Value="{StaticResource VertScrollBarTpl}"/>
+            </Trigger>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Height"    Value="8"/>
+                <Setter Property="MinHeight" Value="8"/>
+                <Setter Property="Template"  Value="{StaticResource HorzScrollBarTpl}"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
 
     <!-- ═══════════════════════════════════════════════
          Slider — Fluent Win11
@@ -169,7 +257,9 @@
                                                       ShadowDepth="4" Direction="270"
                                                       Color="Black"/>
                                 </Border.Effect>
-                                <ScrollViewer MaxHeight="220" Margin="4">
+                                <ScrollViewer MaxHeight="220" Margin="4"
+                                              HorizontalScrollBarVisibility="Disabled"
+                                              VerticalScrollBarVisibility="Auto">
                                     <ItemsPresenter/>
                                 </ScrollViewer>
                             </Border>
@@ -251,7 +341,7 @@
         <Setter Property="Height"      Value="36"/>
         <Setter Property="Foreground"  Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="FontSize"    Value="13"/>
-        <Setter Property="Padding"     Value="16,0"/>
+        <Setter Property="Padding"     Value="14,0"/>
         <Setter Property="Cursor"      Value="Hand"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -266,6 +356,42 @@
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="bd" Property="Background"
                                     Value="{StaticResource BgLayer3Brush}"/>
+                            <Setter TargetName="bd" Property="BorderBrush"
+                                    Value="{StaticResource StrokeStrongBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="bd" Property="Background"
+                                    Value="{StaticResource BgLayer2Brush}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="{StaticResource TextDisabledBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- 28×28 icon button (used for queue item remove, etc.) -->
+    <Style x:Key="IconButton" TargetType="Button">
+        <Setter Property="Width"      Value="28"/>
+        <Setter Property="Height"     Value="28"/>
+        <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}"/>
+        <Setter Property="FontSize"   Value="11"/>
+        <Setter Property="Cursor"     Value="Hand"/>
+        <Setter Property="Padding"    Value="0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="bd" CornerRadius="4" Background="Transparent">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bd" Property="Background"
+                                    Value="{StaticResource BgLayer3Brush}"/>
+                            <Setter Property="Foreground"
+                                    Value="{StaticResource TextPrimaryBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="bd" Property="Background"
@@ -279,6 +405,7 @@
 
     <!-- ═══════════════════════════════════════════════
          ProgressBar — Win11 accent pill
+         Supports both determinate and indeterminate modes
     ═══════════════════════════════════════════════ -->
     <Style x:Key="FluentProgress" TargetType="ProgressBar">
         <Setter Property="Height"     Value="4"/>
@@ -286,13 +413,93 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ProgressBar">
-                    <Border Background="{TemplateBinding Background}"
-                            CornerRadius="2" Height="4">
-                        <Border x:Name="PART_Indicator"
-                                HorizontalAlignment="Left"
-                                CornerRadius="2"
-                                Background="{StaticResource AccentBrush}"/>
+                    <Border Background="{TemplateBinding Background}" CornerRadius="2" Height="4">
+                        <Grid ClipToBounds="True">
+                            <!-- Determinate fill -->
+                            <Border x:Name="PART_Indicator"
+                                    HorizontalAlignment="Left"
+                                    CornerRadius="2"
+                                    Background="{StaticResource AccentBrush}"/>
+                            <!-- Indeterminate glow strip -->
+                            <Border x:Name="GlowBar"
+                                    Width="120" Height="4"
+                                    HorizontalAlignment="Left"
+                                    CornerRadius="2"
+                                    Visibility="Collapsed">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                                        <GradientStop Color="Transparent"                    Offset="0.0"/>
+                                        <GradientStop Color="{StaticResource AccentDefault}" Offset="0.3"/>
+                                        <GradientStop Color="{StaticResource AccentLight}"   Offset="0.5"/>
+                                        <GradientStop Color="{StaticResource AccentDefault}" Offset="0.7"/>
+                                        <GradientStop Color="Transparent"                    Offset="1.0"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <Border.RenderTransform>
+                                    <TranslateTransform x:Name="GlowTx" X="-120"/>
+                                </Border.RenderTransform>
+                            </Border>
+                        </Grid>
                     </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsIndeterminate" Value="True">
+                            <Setter TargetName="PART_Indicator" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="GlowBar"        Property="Visibility" Value="Visible"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <DoubleAnimation Storyboard.TargetName="GlowTx"
+                                                         Storyboard.TargetProperty="X"
+                                                         From="-120" To="900"
+                                                         Duration="0:0:1.6"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════
+         TextBox — Fluent Win11 dark
+    ═══════════════════════════════════════════════ -->
+    <Style x:Key="FluentTextBox" TargetType="TextBox">
+        <Setter Property="Height"                   Value="36"/>
+        <Setter Property="Foreground"               Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="Background"               Value="{StaticResource BgLayer3Brush}"/>
+        <Setter Property="BorderBrush"              Value="{StaticResource StrokeDefaultBrush}"/>
+        <Setter Property="BorderThickness"          Value="1"/>
+        <Setter Property="Padding"                  Value="10,0"/>
+        <Setter Property="FontSize"                 Value="13"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
+        <Setter Property="CaretBrush"               Value="{StaticResource TextPrimaryBrush}"/>
+        <Setter Property="SelectionBrush"           Value="{StaticResource AccentBrush}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="bd"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="4"
+                            Padding="{TemplateBinding Padding}">
+                        <ScrollViewer x:Name="PART_ContentHost"
+                                      VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="bd" Property="BorderBrush"
+                                    Value="{StaticResource StrokeStrongBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsFocused" Value="True">
+                            <Setter TargetName="bd" Property="Background"
+                                    Value="{StaticResource BgLayer2Brush}"/>
+                            <Setter TargetName="bd" Property="BorderBrush"
+                                    Value="{StaticResource AccentBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using Xabe.FFmpeg;
+using Application = System.Windows.Application;
 
 namespace VideoCompressorUI
 {
