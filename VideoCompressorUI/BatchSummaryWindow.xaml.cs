@@ -5,7 +5,10 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
-using System.Windows.Media;
+using Brush            = System.Windows.Media.Brush;
+using Color            = System.Windows.Media.Color;
+using Freezable        = System.Windows.Freezable;
+using SolidColorBrush  = System.Windows.Media.SolidColorBrush;
 
 namespace VideoCompressorUI
 {
