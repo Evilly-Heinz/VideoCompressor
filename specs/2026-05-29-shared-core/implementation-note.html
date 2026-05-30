@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Implementation notes — 2026-05-29-shared-core</title>
+  <style>
+    :root { --bg: #0f1419; --card: #1a2332; --text: #e7ecf3; --muted: #8b9cb3; --accent: #5b9fd4; --border: #2d3a4d; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; margin: 0; padding: 1.5rem; max-width: 52rem; margin-inline: auto; }
+    header.page { border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1.5rem; }
+    header.page h1 { font-size: 1.25rem; margin: 0 0 0.25rem; }
+    header.page p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    .entry { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    .entry header { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--muted); }
+    .entry .tag { background: var(--border); color: var(--accent); padding: 0.15rem 0.5rem; border-radius: 4px; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.04em; }
+    .entry .task-ref { font-family: ui-monospace, monospace; }
+    .entry h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+    .entry ul { margin: 0.5rem 0 0; padding-left: 1.25rem; }
+    .entry li { margin-bottom: 0.25rem; }
+    footer.page { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header class="page">
+    <h1>Implementation notes: 2026-05-29-shared-core</h1>
+    <p>Branch: feature/milestone-a-shared-core · Started: 2026-05-29</p>
+  </header>
+
+  <section id="entries">
+    <article class="entry" data-id="001">
+      <header>
+        <time datetime="2026-05-29T00:00:00">2026-05-29</time>
+        <span class="tag">done</span>
+      </header>
+      <h3>Session started</h3>
+      <p>Implementing Milestone A from plan.md — no tasks.md present.</p>
+      <ul>
+        <li><strong>Context:</strong> Derived task list from plan.md T1–T10.</li>
+        <li><strong>Choice:</strong> Create VideoCompressor.Core (net8.0) and migrate all compression logic.</li>
+        <li><strong>Impact:</strong> Foundation for CLI and future milestones.</li>
+      </ul>
+    </article>
+
+    <article class="entry" data-id="002">
+      <header>
+        <time datetime="2026-05-29T00:00:00">2026-05-29</time>
+        <span class="tag">decision</span>
+        <span class="task-ref">T7</span>
+      </header>
+      <h3>BatchCompressionService uses index-based callbacks</h3>
+      <p>UI maps batch index to QueueItem; callbacks carry item index rather than opaque IDs.</p>
+      <ul>
+        <li><strong>Context:</strong> WPF queue order matches pending list order.</li>
+        <li><strong>Choice:</strong> BatchCompressionCallbacks with ItemStarting/Progress/Completed by index.</li>
+        <li><strong>Impact:</strong> MainWindow stays thin; cancel still breaks batch loop in Core.</li>
+      </ul>
+    </article>
+
+    <article class="entry" data-id="003">
+      <header>
+        <time datetime="2026-05-29T00:00:00">2026-05-29</time>
+        <span class="tag">tradeoff</span>
+        <span class="task-ref">T8</span>
+      </header>
+      <h3>Dispatcher.Invoke on batch callbacks</h3>
+      <p>FFmpeg progress may fire off the UI thread; all batch callbacks marshal via Dispatcher.Invoke.</p>
+      <ul>
+        <li><strong>Context:</strong> Original CompressItem used Dispatcher only for OnProgress.</li>
+        <li><strong>Choice:</strong> Wrap ItemStarting, ItemProgress, ItemCompleted in Dispatcher.Invoke.</li>
+        <li><strong>Impact:</strong> Thread-safe UI updates; matches WPF expectations.</li>
+      </ul>
+    </article>
+
+    <article class="entry" data-id="004">
+      <header>
+        <time datetime="2026-05-29T00:00:00">2026-05-29</time>
+        <span class="tag">done</span>
+        <span class="task-ref">T1-T10</span>
+      </header>
+      <h3>Core extraction complete — build green</h3>
+      <p>Release build succeeded; VideoCompressor.Core.dll copied to bin/Release alongside UI exe.</p>
+      <ul>
+        <li><strong>Context:</strong> Milestone A phases A1–A6 implemented per plan.</li>
+        <li><strong>Choice:</strong> Xabe packages removed from UI csproj; only Core references them.</li>
+        <li><strong>Impact:</strong> Ready for manual GUI regression; T11 tag deferred until merge.</li>
+      </ul>
+    </article>
+  </section>
+
+  <footer class="page">
+    Last updated: <time id="last-updated">2026-05-29</time>
+  </footer>
+</body>
+</html>
