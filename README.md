@@ -14,6 +14,7 @@ Output: `{original_name}_compressed.mp4` saved next to the source file.
 - Adjustable CRF quality slider (18 – 40) and speed preset
 - Live progress bar with percentage
 - One-click **Explorer right-click menu** registration ("Compress this video")
+- **Command-line mode** for scripts and automation (`-q`, `-s`, `-o`)
 - Single-file `.exe`, no installer required
 
 ---
@@ -46,24 +47,70 @@ file in Explorer shows **"Compress this video"**, which opens the app with that 
 
 ---
 
+## Command-line usage
+
+The same `VideoCompressorUI.exe` runs headless when any CLI flag is present (`-q`, `-s`, `-o`, `-h`, `--help`, `/?`).  
+Launching with a file path only (no flags) still opens the GUI.
+
+### Syntax
+
+```
+VideoCompressorUI.exe "<input>" [-q <crf>] [-s <preset>] [-o "<output>"]
+VideoCompressorUI.exe -h | --help | /?
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `-q` | 23 | CRF quality (18–40) |
+| `-s` | `medium` | x264 preset (`ultrafast` … `veryslow`) |
+| `-o` | auto | Output file path (must not already exist) |
+
+### Default output
+
+When `-o` is omitted, output is `{name}_compressed.mp4` in the input file's folder.  
+If that file already exists, the app writes `{name}_compressed_1.mp4`, `_2`, and so on.
+
+### Progress and exit codes
+
+- Encode progress (percent) is written to **stderr** during compression.
+- Exit codes: **0** success, **1** failure (FFmpeg/I/O or `-o` target exists), **2** invalid arguments, **3** cancelled (reserved).
+
+### Examples
+
+```powershell
+# Defaults (CRF 23, preset medium)
+VideoCompressorUI.exe "C:\Videos\clip.mp4"
+
+# Custom quality and speed
+VideoCompressorUI.exe "C:\Videos\clip.mp4" -q 28 -s fast
+
+# Explicit output (fails if output already exists)
+VideoCompressorUI.exe "C:\Videos\clip.mp4" -o "C:\Videos\clip_small.mp4"
+
+# Help
+VideoCompressorUI.exe --help
+```
+
+**Script tip:** use `Start-Process -Wait -PassThru` to read `$process.ExitCode` — direct `$LASTEXITCODE` in PowerShell may not reflect WinExe exit codes reliably.
+
+---
+
 ## Project structure
 
 ```
 VideoCompressor.sln
 │
-├── VideoCompressorUI\              ← C# WPF project (.NET 8, x64)
-│   ├── VideoCompressorUI.csproj
-│   ├── app.manifest                ← PerMonitorV2 DPI, Win11
+├── VideoCompressor.Core/          ← Shared compression + CLI parsing
+├── VideoCompressorUI/             ← WPF shell; references Core
+│   ├── Program.cs                 ← CLI/GUI entry
 │   ├── App.xaml / App.xaml.cs
-│   ├── MainWindow.xaml             ← Fluent dark UI, custom title bar
-│   ├── MainWindow.xaml.cs
-│   └── Themes\Styles.xaml          ← Win11 Fluent color tokens + styles
+│   ├── MainWindow.xaml / MainWindow.xaml.cs
+│   └── Themes/Styles.xaml
 │
-├── scripts\
-│   └── install_context_menu.reg    ← registry template (app auto-generates this)
+├── scripts/
+│   └── install_context_menu.reg
 │
-└── .github\workflows\
-    └── build.yml                   ← CI: build → zip → GitHub Release
+└── .github/workflows/build.yml
 ```
 
 Output: `bin\Release\VideoCompressorUI.exe`

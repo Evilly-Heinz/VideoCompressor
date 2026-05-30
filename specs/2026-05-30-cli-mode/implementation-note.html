@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Implementation notes — 2026-05-30-cli-mode</title>
+  <style>
+    :root { --bg: #0f1419; --card: #1a2332; --text: #e7ecf3; --muted: #8b9cb3; --accent: #5b9fd4; --border: #2d3a4d; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; margin: 0; padding: 1.5rem; max-width: 52rem; margin-inline: auto; }
+    header.page { border-bottom: 1px solid var(--border); padding-bottom: 1rem; margin-bottom: 1.5rem; }
+    header.page h1 { font-size: 1.25rem; margin: 0 0 0.25rem; }
+    header.page p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    .entry { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    .entry header { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: center; margin-bottom: 0.5rem; font-size: 0.85rem; color: var(--muted); }
+    .entry .tag { background: var(--border); color: var(--accent); padding: 0.15rem 0.5rem; border-radius: 4px; text-transform: uppercase; font-size: 0.7rem; letter-spacing: 0.04em; }
+    .entry .task-ref { font-family: ui-monospace, monospace; }
+    .entry h3 { margin: 0 0 0.5rem; font-size: 1rem; }
+    .entry ul { margin: 0.5rem 0 0; padding-left: 1.25rem; }
+    .entry li { margin-bottom: 0.25rem; }
+    footer.page { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <header class="page">
+    <h1>Implementation notes: 2026-05-30-cli-mode</h1>
+    <p>Branch: feature/milestone-b-cli-mode · Started: 2026-05-30</p>
+  </header>
+
+  <section id="entries">
+    <article class="entry" data-id="001">
+      <header>
+        <time datetime="2026-05-30T00:00:00">2026-05-30</time>
+        <span class="tag">done</span>
+      </header>
+      <h3>Session started</h3>
+      <p>Implementing Milestone B from plan.md — no tasks.md present.</p>
+      <ul>
+        <li><strong>Context:</strong> Derived task list from plan.md T1–T10.</li>
+        <li><strong>Choice:</strong> Core CLI types + Program.cs entry before WPF startup.</li>
+        <li><strong>Impact:</strong> Headless path avoids loading MainWindow.</li>
+      </ul>
+    </article>
+
+    <article class="entry" data-id="002">
+      <header>
+        <time datetime="2026-05-30T12:00:00">2026-05-30</time>
+        <span class="tag">decision</span>
+        <span class="task-ref">T6</span>
+      </header>
+      <h3>Program.cs entry before WPF</h3>
+      <p>Custom StartupObject routes CLI through Environment.Exit before Application.Run.</p>
+      <ul>
+        <li><strong>Context:</strong> OnStartup alone would still initialize WPF after StartupUri.</li>
+        <li><strong>Choice:</strong> Program.Main checks CliArguments.IsCliMode and exits without creating App.</li>
+        <li><strong>Impact:</strong> No MainWindow flash for headless runs.</li>
+      </ul>
+    </article>
+
+    <article class="entry" data-id="003">
+      <header>
+        <time datetime="2026-05-30T12:00:00">2026-05-30</time>
+        <span class="tag">tradeoff</span>
+        <span class="task-ref">T10</span>
+      </header>
+      <h3>WinExe exit codes in PowerShell</h3>
+      <p>Environment.Exit(2) works; $LASTEXITCODE in PowerShell often empty for WinExe.</p>
+      <ul>
+        <li><strong>Context:</strong> OutputType remains WinExe per tech-stack.</li>
+        <li><strong>Choice:</strong> Document Start-Process -PassThru for scripts in README.</li>
+        <li><strong>Impact:</strong> Exit codes verified via Start-Process; cmd ERRORLEVEL also unreliable in quick tests.</li>
+      </ul>
+    </article>
+
+    <article class="entry" data-id="004">
+      <header>
+        <time datetime="2026-05-30T12:00:00">2026-05-30</time>
+        <span class="tag">done</span>
+        <span class="task-ref">T1-T10</span>
+      </header>
+      <h3>CLI mode complete — build green</h3>
+      <p>Release build succeeded; smoke tests pass for help, invalid args, -o collision, FFmpeg bootstrap.</p>
+      <ul>
+        <li><strong>Context:</strong> Milestone B phases B1–B6 + README per plan.</li>
+        <li><strong>Choice:</strong> Help text uses ASCII only for console code-page compatibility.</li>
+        <li><strong>Impact:</strong> Ready for manual encode test with real video; v1.2.0 tag deferred per spec D8.</li>
+      </ul>
+    </article>
+  </section>
+
+  <footer class="page">
+    Last updated: <time id="last-updated">2026-05-30</time>
+  </footer>
+</body>
+</html>

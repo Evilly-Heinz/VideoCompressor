@@ -20,6 +20,7 @@
     <!-- Win11 DPI awareness -->
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>video-gallery-100.ico</ApplicationIcon>
+    <StartupObject>VideoCompressorUI.Program</StartupObject>
     <Company>Groove Technology</Company>
     <Authors>Loc Nguyen</Authors>
     <PackageIcon></PackageIcon>
