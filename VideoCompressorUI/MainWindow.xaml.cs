@@ -181,12 +181,19 @@ namespace VideoCompressorUI
             InitializeComponent();
             DataContext = this;
             FfmpegBootstrap.ConfigurePaths();
-            CheckRegistrationStatus();
             UpdateCrfDescription((int)CrfSlider.Value);
+            Loaded += MainWindow_Loaded;
 
             var args = Environment.GetCommandLineArgs();
             if (args.Length >= 2 && File.Exists(args[1]))
                 AddToQueue(new[] { args[1] });
+        }
+
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            Loaded -= MainWindow_Loaded;
+            await RunStartupRegistryGuardAsync();
+            CheckRegistrationStatus();
         }
 
         // ── Title bar ────────────────────────────────────────────────────────
@@ -627,13 +634,62 @@ namespace VideoCompressorUI
                Path.GetExtension(path).ToLowerInvariant()) >= 0;
 
         // ── Explorer Integration ──────────────────────────────────────────────
+        private static string GetCurrentExePath()
+            => Process.GetCurrentProcess().MainModule?.FileName
+               ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VideoCompressorUI.exe");
+
+        private static Task WriteRegFileAsync(string path, string content)
+            => Task.Run(() => File.WriteAllText(path, content, Encoding.Unicode));
+
+        private static Task<int> ImportRegFileElevatedAsync(string regFilePath)
+        {
+            var psi = new ProcessStartInfo("regedit.exe", $"/s \"{regFilePath}\"")
+            {
+                UseShellExecute = true,
+                Verb            = "runas"
+            };
+
+            return Task.Run(() =>
+            {
+                using var proc = Process.Start(psi)!;
+                proc.WaitForExit();
+                return proc.ExitCode;
+            });
+        }
+
+        private async Task RunStartupRegistryGuardAsync()
+        {
+            string currentExe = GetCurrentExePath();
+            if (!ContextMenuRegistry.TryGetRegisteredExePath(out string? registered)
+                || string.IsNullOrWhiteSpace(registered)
+                || ContextMenuRegistry.PathsEqual(registered, currentExe))
+            {
+                return;
+            }
+
+            string regFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                                          "cleanup_context_menu.reg");
+
+            try
+            {
+                await WriteRegFileAsync(regFile, ContextMenuRegistry.BuildCleanupRegContent());
+                await ImportRegFileElevatedAsync(regFile);
+            }
+            catch (Win32Exception ex) when (ex.NativeErrorCode == 1223)
+            {
+                // UAC denied — show Register via CheckRegistrationStatus; no error dialog.
+            }
+            catch
+            {
+                // Non-fatal; user can click Register to fix.
+            }
+        }
+
         private void CheckRegistrationStatus()
         {
             try
             {
-                using var key = Microsoft.Win32.Registry.ClassesRoot.OpenSubKey(
-                    @"SystemFileAssociations\.mp4\shell\VideoCompressor");
-                bool registered = key != null;
+                bool registered = ContextMenuRegistry.IsRegisteredForCurrentExe(GetCurrentExePath());
                 CtxMenuStatusLabel.Text       = registered
                     ? "✓  Registered — right-click any video in Explorer"
                     : "Add right-click \"Compress video\" to Explorer";
@@ -654,27 +710,14 @@ namespace VideoCompressorUI
 
             try
             {
-                string exePath = Process.GetCurrentProcess().MainModule?.FileName
-                                 ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VideoCompressorUI.exe");
-
+                string exePath = GetCurrentExePath();
                 string regFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                                               "install_context_menu.reg");
 
-                await Task.Run(() =>
-                    File.WriteAllText(regFile, BuildRegContent(exePath), Encoding.Unicode));
+                await WriteRegFileAsync(regFile,
+                    ContextMenuRegistry.BuildCombinedRegContent(exePath));
 
-                var psi = new ProcessStartInfo("regedit.exe", $"/s \"{regFile}\"")
-                {
-                    UseShellExecute = true,
-                    Verb            = "runas"
-                };
-
-                int exitCode = await Task.Run(() =>
-                {
-                    using var proc = Process.Start(psi)!;
-                    proc.WaitForExit();
-                    return proc.ExitCode;
-                });
+                int exitCode = await ImportRegFileElevatedAsync(regFile);
 
                 if (exitCode == 0)
                     CheckRegistrationStatus();
@@ -696,26 +739,6 @@ namespace VideoCompressorUI
                 ShowError($"Failed to register context menu:\n{ex.Message}");
                 RegisterCtxBtn.IsEnabled = true;
             }
-        }
-
-        private static string BuildRegContent(string exePath)
-        {
-            string ep     = exePath.Replace(@"\", @"\\");
-            string[] exts = { ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v" };
-            var sb = new StringBuilder();
-            sb.AppendLine("Windows Registry Editor Version 5.00");
-
-            foreach (string ext in exts)
-            {
-                sb.AppendLine();
-                sb.AppendLine($@"[HKEY_CLASSES_ROOT\SystemFileAssociations\{ext}\shell\VideoCompressor]");
-                sb.AppendLine(@"@=""Compress this video""");
-                sb.AppendLine($"\"Icon\"=\"{ep},0\"");
-                sb.AppendLine($@"[HKEY_CLASSES_ROOT\SystemFileAssociations\{ext}\shell\VideoCompressor\command]");
-                sb.AppendLine($"@=\"\\\"{ep}\\\" \\\"%1\\\"\"");
-            }
-
-            return sb.ToString();
         }
     }
 }
