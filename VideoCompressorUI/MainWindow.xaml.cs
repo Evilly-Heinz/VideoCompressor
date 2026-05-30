@@ -14,8 +14,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
-using Xabe.FFmpeg;
-using Xabe.FFmpeg.Downloader;
+using VideoCompressor.Core;
 // Disambiguate WPF types from System.Windows.Forms equivalents
 using Brush            = System.Windows.Media.Brush;
 using Color            = System.Windows.Media.Color;
@@ -127,8 +126,10 @@ namespace VideoCompressorUI
         private string?                  _outputFolder;
         private string                   _outputSuffix = "_compressed";
 
-        private static readonly string FfmpegDir =
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ffmpeg");
+        private readonly CompressionService      _compressionService = new();
+        private readonly BatchCompressionService   _batchService;
+        private readonly MediaProbeService         _mediaProbeService = new();
+        private readonly SizeEstimateService       _sizeEstimateService = new();
 
         private static readonly string[] VideoExtensions =
             { ".mp4", ".mov", ".avi", ".mkv", ".wmv", ".flv", ".webm", ".m4v", ".ts", ".mts" };
@@ -176,9 +177,10 @@ namespace VideoCompressorUI
         // ── Init ─────────────────────────────────────────────────────────────
         public MainWindow()
         {
+            _batchService = new BatchCompressionService(_compressionService);
             InitializeComponent();
             DataContext = this;
-            FFmpeg.SetExecutablesPath(FfmpegDir);
+            FfmpegBootstrap.ConfigurePaths();
             CheckRegistrationStatus();
             UpdateCrfDescription((int)CrfSlider.Value);
 
@@ -270,18 +272,12 @@ namespace VideoCompressorUI
             if (thumb != null) item.Thumbnail = thumb;
 
             // Source resolution — needs ffprobe
-            if (!File.Exists(Path.Combine(FfmpegDir, "ffprobe.exe"))) return;
-            try
+            var summary = await _mediaProbeService.ProbeAsync(item.FilePath);
+            if (summary != null)
             {
-                var info = await FFmpeg.GetMediaInfo(item.FilePath);
-                var vid  = info.VideoStreams.FirstOrDefault();
-                if (vid != null)
-                {
-                    item.SourceResolution = $"{vid.Width}×{vid.Height}";
-                    Dispatcher.Invoke(UpdateSourceResLabel);
-                }
+                item.SourceResolution = summary.ResolutionDisplay;
+                Dispatcher.Invoke(UpdateSourceResLabel);
             }
-            catch { }
         }
 
         private void RefreshQueueUI()
@@ -403,18 +399,15 @@ namespace VideoCompressorUI
 
             try
             {
-                Directory.CreateDirectory(FfmpegDir);
-                if (!File.Exists(Path.Combine(FfmpegDir, "ffmpeg.exe")))
+                if (!FfmpegLocator.IsFfmpegAvailable)
                 {
                     SetStatus("Downloading FFmpeg (~70 MB)… please wait.");
                     BottomProgress.IsIndeterminate = true;
                     BottomProgress.Visibility      = Visibility.Visible;
-                    await FFmpegDownloader.GetLatestVersion(FFmpegVersion.Official, FfmpegDir);
-                    FFmpeg.SetExecutablesPath(FfmpegDir);
+                    await FfmpegBootstrap.EnsureAvailableAsync(_cts.Token);
                     BottomProgress.IsIndeterminate = false;
                     BottomProgress.Visibility      = Visibility.Collapsed;
                     _ = UpdateEstimate();
-                    // Load source resolutions now that ffprobe is available
                     foreach (var q in Queue)
                         if (q.SourceResolution == null)
                             _ = LoadItemExtrasAsync(q);
@@ -422,12 +415,45 @@ namespace VideoCompressorUI
 
                 if (!_cts.IsCancellationRequested)
                 {
-                    foreach (var item in pending)
+                    int    crf           = (int)CrfSlider.Value;
+                    string preset        = GetSelectedPreset();
+                    int    targetHeight  = ParseTargetHeight(GetSelectedResolution());
+
+                    var jobs = pending.Select(item => new CompressionOptions
                     {
-                        if (_cts.IsCancellationRequested) break;
-                        await CompressItem(item, _cts.Token);
-                        if (item.Status == "Cancelled") break;
-                    }
+                        InputPath    = item.FilePath,
+                        OutputPath   = OutputPathResolver.Resolve(item.FilePath, _outputFolder, _outputSuffix),
+                        Crf          = crf,
+                        Preset       = preset,
+                        TargetHeight = targetHeight,
+                    }).ToList();
+
+                    await _batchService.RunAsync(jobs, new BatchCompressionCallbacks
+                    {
+                        ItemStarting = (index, options) => Dispatcher.Invoke(() =>
+                        {
+                            var item = pending[index];
+                            item.Status   = "Compressing";
+                            item.Progress = 0;
+
+                            BottomProgress.IsIndeterminate = false;
+                            BottomProgress.Value           = 0;
+                            BottomProgress.Visibility      = Visibility.Visible;
+                            SetStatus($"{item.FileName}  —  CRF {options.Crf} · {options.Preset}"
+                                + (options.TargetHeight > 0 ? $" · {options.TargetHeight}p" : ""));
+                        }),
+                        ItemProgress = (index, percent) => Dispatcher.Invoke(() =>
+                        {
+                            pending[index].Progress = percent;
+                            BottomProgress.Value    = percent;
+                        }),
+                        ItemCompleted = (index, result) => Dispatcher.Invoke(() =>
+                        {
+                            ApplyCompressionResult(pending[index], result);
+                            BottomProgress.Visibility = Visibility.Collapsed;
+                            BottomProgress.Value      = 0;
+                        }),
+                    }, _cts.Token);
                 }
             }
             catch (Exception ex)
@@ -449,88 +475,24 @@ namespace VideoCompressorUI
             ShowBatchSummary();
         }
 
-        private async Task CompressItem(QueueItem item, CancellationToken token)
+        private void ApplyCompressionResult(QueueItem item, CompressionItemResult result)
         {
-            int    crf    = (int)CrfSlider.Value;
-            string preset = GetSelectedPreset();
-            string res    = GetSelectedResolution();
-            string output = GetOutputPath(item.FilePath);
-
-            item.Status   = "Compressing";
-            item.Progress = 0;
-
-            BottomProgress.IsIndeterminate = false;
-            BottomProgress.Value           = 0;
-            BottomProgress.Visibility      = Visibility.Visible;
-            SetStatus($"{item.FileName}  —  CRF {crf} · {preset}"
-                + (string.IsNullOrEmpty(res) ? "" : $" · {res}p"));
-
-            try
+            switch (result.Status)
             {
-                IMediaInfo info = await FFmpeg.GetMediaInfo(item.FilePath, token);
-
-                var conversion = FFmpeg.Conversions.New()
-                    .SetOutput(output)
-                    .SetOverwriteOutput(true);
-
-                var video = info.VideoStreams.FirstOrDefault();
-                if (video != null)
-                {
-                    video.SetCodec(VideoCodec.h264);
-                    conversion.AddStream(video);
-                }
-
-                var audio = info.AudioStreams.FirstOrDefault();
-                if (audio != null)
-                {
-                    audio.SetCodec(AudioCodec.aac);
-                    conversion.AddStream(audio);
-                }
-
-                conversion
-                    .AddParameter($"-crf {crf}",          ParameterPosition.PostInput)
-                    .AddParameter($"-preset {preset}",    ParameterPosition.PostInput)
-                    .AddParameter("-b:a 128k",            ParameterPosition.PostInput)
-                    .AddParameter("-movflags +faststart", ParameterPosition.PostInput);
-
-                if (!string.IsNullOrEmpty(res) && video != null)
-                    conversion.AddParameter($"-vf scale=-2:{res}", ParameterPosition.PostInput);
-
-                conversion.OnProgress += (_, args) =>
-                    Dispatcher.Invoke(() =>
-                    {
-                        int pct = Math.Clamp(args.Percent, 0, 100);
-                        BottomProgress.Value = pct;
-                        item.Progress        = pct;
-                    });
-
-                await conversion.Start(token);
-
-                if (File.Exists(output))
-                {
+                case CompressionItemStatus.Done:
                     item.Status     = "Done ✓";
                     item.Progress   = 100;
-                    item.OutputPath = output;
+                    item.OutputPath = result.OutputPath;
                     BottomProgress.Value = 100;
-                }
-                else
-                {
+                    break;
+                case CompressionItemStatus.Cancelled:
+                    item.Status = "Cancelled";
+                    break;
+                case CompressionItemStatus.Error:
                     item.Status = "Error";
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                item.Status = "Cancelled";
-            }
-            catch (Exception ex)
-            {
-                item.Status = "Error";
-                ShowError($"{item.FileName}:\n{ex.Message}");
-            }
-            finally
-            {
-                BottomProgress.Visibility = Visibility.Collapsed;
-                BottomProgress.Value      = 0;
+                    if (!string.IsNullOrEmpty(result.ErrorMessage))
+                        ShowError($"{item.FileName}:\n{result.ErrorMessage}");
+                    break;
             }
         }
 
@@ -571,36 +533,22 @@ namespace VideoCompressorUI
                     return;
                 }
 
-                long totalSrcBytes = pending.Sum(item => new FileInfo(item.FilePath).Length);
-                long totalEstBytes = 0;
-
-                if (File.Exists(Path.Combine(FfmpegDir, "ffprobe.exe")))
+                int crf = 0;
+                int targetHeight = 0;
+                Dispatcher.Invoke(() =>
                 {
-                    int    crf = 0;
-                    string res = "";
-                    Dispatcher.Invoke(() => { crf = (int)CrfSlider.Value; res = GetSelectedResolution(); });
+                    crf = (int)CrfSlider.Value;
+                    targetHeight = ParseTargetHeight(GetSelectedResolution());
+                });
 
-                    foreach (var item in pending)
-                    {
-                        if (token.IsCancellationRequested) return;
-                        IMediaInfo info;
-                        try { info = await FFmpeg.GetMediaInfo(item.FilePath, token); }
-                        catch { continue; }
+                var estimate = await _sizeEstimateService.EstimateAsync(
+                    pending.Select(q => q.FilePath).ToList(),
+                    crf,
+                    targetHeight,
+                    token);
 
-                        var vid = info.VideoStreams.FirstOrDefault();
-                        if (vid == null) continue;
-
-                        double srcBps    = vid.Bitrate > 0 ? vid.Bitrate
-                                           : new FileInfo(item.FilePath).Length * 8.0
-                                             / Math.Max(info.Duration.TotalSeconds, 1);
-                        double crfFactor = 0.45 * Math.Pow(2.0, (23.0 - crf) / 6.0);
-                        int    targetH   = int.TryParse(res, out int h) ? h : 0;
-                        double resFactor = targetH > 0 && targetH < vid.Height
-                                           ? Math.Pow((double)targetH / vid.Height, 2) : 1.0;
-                        double estBps    = srcBps * crfFactor * resFactor + 128_000;
-                        totalEstBytes   += (long)(estBps * info.Duration.TotalSeconds / 8.0);
-                    }
-                }
+                long totalSrcBytes = estimate.TotalSourceBytes;
+                long totalEstBytes = estimate.TotalEstimatedBytes;
 
                 Dispatcher.Invoke(() =>
                 {
@@ -646,6 +594,9 @@ namespace VideoCompressorUI
             System.Windows.Controls.SelectionChangedEventArgs e)
             => _ = UpdateEstimate();
 
+        private static int ParseTargetHeight(string res)
+            => int.TryParse(res, out int h) ? h : 0;
+
         private string GetSelectedPreset()
         {
             if (PresetCombo.SelectedItem is System.Windows.Controls.ComboBoxItem item)
@@ -670,14 +621,6 @@ namespace VideoCompressorUI
 
         private void ShowError(string msg)
             => MessageBox.Show(msg, "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-
-        private string GetOutputPath(string inputFile)
-        {
-            string dir    = _outputFolder ?? Path.GetDirectoryName(inputFile) ?? ".";
-            string name   = Path.GetFileNameWithoutExtension(inputFile);
-            string suffix = string.IsNullOrWhiteSpace(_outputSuffix) ? "_compressed" : _outputSuffix;
-            return Path.Combine(dir, name + suffix + ".mp4");
-        }
 
         private static bool IsVideoFile(string path)
             => Array.IndexOf(VideoExtensions,
