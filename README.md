@@ -31,7 +31,7 @@ Output: `{original_name}_compressed.mp4` saved next to the source file.
 
 ## Quick start
 
-1. Download the latest `VideoCompressor-vX.Y.Z.zip` from [Releases](../../releases).
+1. Download the latest `VideoCompressor-vX.Y.Z.zip` from [Releases](https://github.com/Evilly-Heinz/VideoCompressor/releases/latest).
 2. Extract anywhere (e.g. `C:\Tools\VideoCompressor\`).
 3. Install [.NET 8 Desktop Runtime](https://aka.ms/dotnet/8.0/windowsdesktop-runtime-win-x64.exe) if not already present.
 4. Run `VideoCompressorUI.exe`.
